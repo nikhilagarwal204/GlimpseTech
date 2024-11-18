@@ -1,11 +1,13 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import Enum
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import os
 import csv
+from enums import Source, InterestLevel, Status
 
 load_dotenv()
 
@@ -31,9 +33,9 @@ class Lead(db.Model):
     lead_id = db.Column(db.Integer, nullable=False)
     lead_name = db.Column(db.String(200), nullable=False)
     contact_info = db.Column(db.String(200), nullable=False)
-    source = db.Column(db.String(50), nullable=False)
-    interest_level = db.Column(db.String(20), nullable=False)
-    status = db.Column(db.String(20), nullable=False)
+    source = db.Column(Enum(Source), nullable=False)
+    interest_level = db.Column(Enum(InterestLevel), nullable=False)
+    status = db.Column(Enum(Status), nullable=False)
     salespersons = db.relationship(
         "Salesperson", secondary=salesperson_leads, back_populates="leads"
     )
@@ -96,6 +98,7 @@ def ingest_leads():
         csvreader = csv.DictReader(
             csvfile.read().decode("utf-8").splitlines(), delimiter=","
         )
+        # csvreader = csv.DictReader(open("leads.csv"), delimiter=",")
         for row in csvreader:
             salesperson = Salesperson.query.filter_by(
                 username=row["Assigned Salesperson"]
@@ -109,13 +112,18 @@ def ingest_leads():
                     ),
                     400,
                 )
+
+            source = Source[row["Source"].replace(" ", "_").upper()]
+            interest_level = InterestLevel[row["Interest Level"].upper()]
+            status = Status[row["Status"].upper()]
+
             lead = Lead(
                 lead_id=row["Lead ID"],
                 lead_name=row["Lead Name"],
                 contact_info=row["Contact Information"],
-                source=row["Source"],
-                interest_level=row["Interest Level"],
-                status=row["Status"],
+                source=source,
+                interest_level=interest_level,
+                status=status,
             )
 
             lead.salespersons.append(salesperson)
@@ -129,7 +137,14 @@ def ingest_leads():
         return jsonify({"error": "Failed to ingest leads", "details": str(e)}), 400
 
 
-# Endpoint to Retrieve Leads for Authenticated Salesperson
+# Helper function to map string to Enum
+def get_enum_value(enum, value):
+    try:
+        return enum[value.replace(" ", "_").upper()]
+    except KeyError:
+        raise ValueError(f"Invalid value for {enum.__name__}: {value}")
+
+
 @app.route("/leads", methods=["POST"])
 @basic_auth_required
 def get_salesperson_leads(salesperson):
@@ -146,11 +161,19 @@ def get_salesperson_leads(salesperson):
         )
 
         if sources:
-            query = query.filter(Lead.source.in_(sources))
+            query = query.filter(
+                Lead.source.in_([get_enum_value(Source, source) for source in sources])
+            )
         if interest_levels:
-            query = query.filter(Lead.interest_level.in_(interest_levels))
+            query = query.filter(
+                Lead.interest_level.in_(
+                    [get_enum_value(InterestLevel, level) for level in interest_levels]
+                )
+            )
         if statuses:
-            query = query.filter(Lead.status.in_(statuses))
+            query = query.filter(
+                Lead.status.in_([get_enum_value(Status, status) for status in statuses])
+            )
 
         paginated_leads = query.paginate(page=page, per_page=per_page)
 
@@ -161,9 +184,9 @@ def get_salesperson_leads(salesperson):
                         "lead_id": lead.lead_id,
                         "lead_name": lead.lead_name,
                         "contact_info": lead.contact_info,
-                        "source": lead.source,
-                        "interest_level": lead.interest_level,
-                        "status": lead.status,
+                        "source": lead.source.value,
+                        "interest_level": lead.interest_level.value,
+                        "status": lead.status.value,
                     }
                     for lead in paginated_leads.items
                 ],
