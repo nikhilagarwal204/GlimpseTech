@@ -55,20 +55,20 @@ class Salesperson(db.Model):
 
 
 # Initialize Database
-# with app.app_context():
-#     db.drop_all()
-#     db.create_all()
-#     # Pre-populate Salesperson table
-#     salespersons = [
-#         Salesperson(username="Alice"),
-#         Salesperson(username="Diane"),
-#         Salesperson(username="Charlie"),
-#         Salesperson(username="Bob"),
-#     ]
-#     for salesperson in salespersons:
-#         salesperson.set_password("pass123")  # Default password for demo purposes
-#     db.session.bulk_save_objects(salespersons)
-#     db.session.commit()
+with app.app_context():
+    db.drop_all()
+    db.create_all()
+    # Pre-populate Salesperson table
+    salespersons = [
+        Salesperson(username="Alice"),
+        Salesperson(username="Diane"),
+        Salesperson(username="Charlie"),
+        Salesperson(username="Bob"),
+    ]
+    for salesperson in salespersons:
+        salesperson.set_password("pass123")  # Default password for demo purposes
+    db.session.bulk_save_objects(salespersons)
+    db.session.commit()
 
 
 # Authentication Decorator
@@ -189,4 +189,4 @@ def login():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8000)
+    app.run(debug=False, host="0.0.0.0", port=8000)
